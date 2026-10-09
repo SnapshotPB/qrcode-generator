@@ -374,6 +374,14 @@ pub fn to_svg(
     let total = width + 2 * q;
     let d = p.dot_scale.clamp(0.05, 1.0);
     let r = d / 2.0;
+    // At full size adjacent squares share an edge and anti-aliasing leaves a
+    // faint seam. A small overlap removes it.
+    let bleed = if p.dot_shape != 0 && d >= 0.999 {
+        0.03
+    } else {
+        0.0
+    };
+    let side = d + 2.0 * bleed;
     let mut svg = String::with_capacity(width * width * 40);
     svg.push_str(&format!(
         "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {t} {t}\" width=\"{t}\" height=\"{t}\" shape-rendering=\"geometricPrecision\">\n",
@@ -411,14 +419,14 @@ pub fn to_svg(
             let y = (row + q) as f64;
             match p.dot_shape {
                 1 => svg.push_str(&format!(
-                    "<rect x=\"{:.3}\" y=\"{:.3}\" width=\"{d:.3}\" height=\"{d:.3}\"/>\n",
-                    x + 0.5 - r,
-                    y + 0.5 - r
+                    "<rect x=\"{:.3}\" y=\"{:.3}\" width=\"{side:.3}\" height=\"{side:.3}\"/>\n",
+                    x + 0.5 - r - bleed,
+                    y + 0.5 - r - bleed
                 )),
                 2 => svg.push_str(&format!(
-                    "<rect x=\"{:.3}\" y=\"{:.3}\" width=\"{d:.3}\" height=\"{d:.3}\" rx=\"{:.3}\"/>\n",
-                    x + 0.5 - r,
-                    y + 0.5 - r,
+                    "<rect x=\"{:.3}\" y=\"{:.3}\" width=\"{side:.3}\" height=\"{side:.3}\" rx=\"{:.3}\"/>\n",
+                    x + 0.5 - r - bleed,
+                    y + 0.5 - r - bleed,
                     r * 0.5
                 )),
                 _ => svg.push_str(&format!(
