@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>QR Logo Generator</title>
 <meta name="description" content="Make QR codes with your logo and colors. Runs offline in the browser with Rust and WebAssembly.">
-<meta name="theme-color" content="#2f7d4b">
+<meta name="theme-color" content="#7a0093">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700&display=swap">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="QR Logo Generator">
 <meta property="og:title" content="QR Logo Generator">
@@ -14,52 +17,51 @@
 <meta property="og:image" content="https://snapshotpb.github.io/qrcode-generator/social.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="A green dotted QR code with the Snapshot logo in the center, next to the title QR Logo Generator.">
+<meta property="og:image:alt" content="A purple dotted QR code with the Snapshot logo in the center, next to the title QR Logo Generator.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="QR Logo Generator">
 <meta name="twitter:description" content="Make QR codes with your logo and colors. Runs offline in the browser with Rust and WebAssembly.">
 <meta name="twitter:image" content="https://snapshotpb.github.io/qrcode-generator/social.png">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
+  /* SnapshotPB brand palette (snapshotpb.com). */
   :root {
-    --bg: #f4f5f7;
-    --panel: #ffffff;
-    --text: #1b1f24;
-    --muted: #5c6470;
-    --border: #d6dae0;
-    --accent: #2f7d4b;
-    --accent-text: #ffffff;
-    --ok: #2f7d4b;
-    --bad: #c62828;
-    --warn: #b26a00;
-    color-scheme: light dark;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #15181c;
-      --panel: #1f2329;
-      --text: #e8eaed;
-      --muted: #9aa3ad;
-      --border: #343a42;
-      --accent: #4caf6e;
-      --accent-text: #0e1a12;
-      --ok: #4caf6e;
-      --bad: #ef5350;
-      --warn: #ffb74d;
-    }
+    --bg: #0b0a0a;
+    --panel: #121111;
+    --card: rgba(30, 29, 29, 0.7);
+    --text: #fefefe;
+    --muted: #a0a5a5;
+    --border: rgba(88, 98, 97, 0.35);
+    --charcoal: #373435;
+    --slate: #586261;
+    --accent: #7a0093;
+    --accent-2: #f45302;
+    --accent-text: #fefefe;
+    --ok: #4caf6e;
+    --bad: #ff6a3d;
+    --warn: #f4a302;
+    --radius: 12px;
+    --font-heading: 'Orbitron', system-ui, -apple-system, sans-serif;
+    --font-body: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color-scheme: dark;
+    accent-color: var(--accent);
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--text);
-    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--font-body); }
+  body { background-image: radial-gradient(circle at 10% 20%, rgba(122, 0, 147, 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(244, 83, 2, 0.1) 0%, transparent 40%); background-attachment: fixed; }
   header { padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel);
     display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
-  header h1 { margin: 0; font-size: 18px; }
+  header h1 { margin: 0; font-size: 18px; font-family: var(--font-heading); font-weight: 700; letter-spacing: .04em;
+    background: linear-gradient(135deg, var(--accent-2) 0%, #c24bdc 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
   header span { color: var(--muted); font-size: 13px; }
+  header .gh { margin-left: auto; color: var(--text); display: inline-flex; align-items: center; padding: 4px; border-radius: 50%; }
+  header .gh:hover { color: var(--accent-2); }
   main { display: grid; grid-template-columns: 380px 1fr; gap: 20px; padding: 20px; max-width: 1400px; margin: 0 auto; }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
   .panel + .panel { margin-top: 14px; }
-  .panel h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .panel h2 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-family: var(--font-heading); }
   label { display: block; margin: 8px 0 4px; font-weight: 600; font-size: 13px; }
   label.inline { display: flex; align-items: center; gap: 8px; font-weight: 500; margin: 6px 0; }
   label.inline input { margin: 0; }
@@ -73,8 +75,9 @@
   .slider output { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); text-align: right; }
   button { padding: 7px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
     color: var(--text); font: inherit; cursor: pointer; }
-  button:hover { border-color: var(--accent); }
-  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  button:hover { border-color: var(--accent-2); }
+  button.primary { background: linear-gradient(135deg, var(--accent-2) 0%, var(--accent) 100%); color: var(--accent-text); border-color: transparent; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.15); }
   button:disabled { opacity: .5; cursor: default; }
   .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
   .nudge { display: grid; grid-template-columns: repeat(3, 36px); grid-template-rows: repeat(3, auto); gap: 4px; margin-top: 8px; }
@@ -88,19 +91,19 @@
   input[type=color] { width: 100%; height: 34px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
   .logo-thumb { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
   .logo-thumb canvas { width: 56px; height: 56px; border: 1px solid var(--border); border-radius: 6px;
-    background: repeating-conic-gradient(#8884 0 25%, transparent 0 50%) 0 0 / 12px 12px; }
+    background: repeating-conic-gradient(#fff2 0 25%, transparent 0 50%) 0 0 / 12px 12px; }
   .drop { border: 1px dashed var(--border); border-radius: 8px; padding: 12px; text-align: center; color: var(--muted); font-size: 12px; }
-  .drop.over { border-color: var(--accent); color: var(--accent); }
+  .drop.over { border-color: var(--accent-2); color: var(--accent-2); }
 
   #previewWrap { position: sticky; top: 20px; }
   #stage { position: relative; width: 100%; max-width: 640px; aspect-ratio: 1; margin: 0 auto;
-    background: repeating-conic-gradient(#8883 0 25%, transparent 0 50%) 0 0 / 20px 20px;
-    border: 1px solid var(--border); border-radius: 8px; overflow: hidden; touch-action: none; user-select: none; }
+    background: repeating-conic-gradient(#fff2 0 25%, transparent 0 50%) 0 0 / 20px 20px;
+    border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; touch-action: none; user-select: none; }
   #stage svg { display: block; width: 100%; height: 100%; }
   #stage.grab { cursor: grab; }
   #stage.grabbing { cursor: grabbing; }
-  #bounds { position: absolute; border: 1.5px dashed rgba(60,120,255,.9); pointer-events: none;
-    box-shadow: 0 0 0 1px rgba(255,255,255,.6); display: none; }
+  #bounds { position: absolute; border: 1.5px dashed rgba(244, 83, 2, .95); pointer-events: none;
+    box-shadow: 0 0 0 1px rgba(255,255,255,.5); display: none; }
   #stage.showBounds #bounds { display: block; }
   .status { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin-top: 12px; font-size: 13px; }
   .status dt { color: var(--muted); }
@@ -116,13 +119,16 @@
 <header>
   <h1>QR Logo Generator</h1>
   <span>Rust + WebAssembly. Works offline. Drag the logo on the preview, use the wheel to resize it.</span>
+  <a class="gh" href="https://github.com/SnapshotPB/qrcode-generator" target="_blank" rel="noopener" aria-label="Source code on GitHub" title="Source code on GitHub">
+    <svg viewBox="0 0 16 16" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+  </a>
 </header>
 <main>
   <section id="controls">
     <div class="panel">
       <h2>Content</h2>
       <label for="text">Text or URL</label>
-      <textarea id="text" spellcheck="false">https://snapshotpb.com/</textarea>
+      <textarea id="text" spellcheck="false">https://snapshotpb.github.io/qrcode-generator/</textarea>
       <div class="row">
         <div>
           <label for="ec">Error correction</label>
@@ -190,7 +196,7 @@
       <label class="inline"><input id="showBounds" type="checkbox" checked> Show logo bounds on the preview</label>
       <div class="row" style="align-items:end">
         <label class="inline" style="margin-bottom:8px"><input id="colorize" type="checkbox"> Colorize the logo</label>
-        <div><label for="colorizeColor">Logo color</label><input id="colorizeColor" type="color" value="#d62828"></div>
+        <div><label for="colorizeColor">Logo color</label><input id="colorizeColor" type="color" value="#f45302"></div>
       </div>
       <p class="hint">Colorize gives every opaque logo pixel one color, in every logo mode. White pixels stay transparent when that option is on.</p>
 
@@ -214,7 +220,7 @@
     <div class="panel">
       <h2>Style</h2>
       <div class="row">
-        <div><label for="dotColor">Dot color</label><input id="dotColor" type="color" value="#2f7d4b"></div>
+        <div><label for="dotColor">Dot color</label><input id="dotColor" type="color" value="#7a0093"></div>
         <div><label for="bgColor">Background</label><input id="bgColor" type="color" value="#ffffff"></div>
       </div>
       <label class="inline"><input id="transparentBg" type="checkbox"> Transparent background</label>
@@ -285,7 +291,7 @@ const els = {
   dotColor: $('dotColor'), bgColor: $('bgColor'), transparentBg: $('transparentBg'), dotShape: $('dotShape'),
   quiet: $('quiet'), dotScale: $('dotScale'), verify: $('verify'), pngSize: $('pngSize'), showBounds: $('showBounds'),
 };
-const SETTINGS_KEY = 'qr-logo-settings-v2';
+const SETTINGS_KEY = 'qr-logo-settings-v3';
 
 let logo = null; // { data: Uint8Array, width, height, href }
 let lastSvg = '';
