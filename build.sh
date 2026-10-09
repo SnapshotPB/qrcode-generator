@@ -11,4 +11,5 @@ if command -v wasm-opt >/dev/null 2>&1; then
   wasm-opt -Oz -o pkg/qr_logo_bg.wasm pkg/qr_logo_bg.wasm
 fi
 python3 tools/bundle.py www/index.html pkg/qr_logo.js pkg/qr_logo_bg.wasm www/demo-logo.svg www/favicon.svg dist/index.html
+cp www/social.png dist/social.png
 echo "Wrote dist/index.html ($(stat -c %s dist/index.html) bytes)"

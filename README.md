@@ -76,6 +76,7 @@ with a phone camera.
 - `www/index.html`: the web page.
 - `www/demo-logo.svg`: the built-in logo.
 - `www/favicon.svg`: the page icon, inlined into the offline page.
+- `www/social.png`: the 1200 x 630 preview image for social cards, copied to `dist/`.
 - `www/favicon.svg`: the icon of the page.
 - `tools/bundle.py`: inlines the JavaScript glue, the wasm binary, the built-in logo and the favicon into `dist/index.html`.
 
