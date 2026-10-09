@@ -3,6 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+mkdir -p dist pkg
 cargo build --release --target wasm32-unknown-unknown
 wasm-bindgen --target no-modules --no-typescript --out-dir pkg \
   target/wasm32-unknown-unknown/release/qr_logo.wasm
