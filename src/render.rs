@@ -220,7 +220,10 @@ impl<'a> Sampler<'a> {
     fn to_logo_frame(&self, mx: f64, my: f64) -> (f64, f64) {
         let mx = mx - self.cx;
         let my = my - self.cy;
-        (mx * self.cos + my * self.sin, -mx * self.sin + my * self.cos)
+        (
+            mx * self.cos + my * self.sin,
+            -mx * self.sin + my * self.cos,
+        )
     }
 
     /// The logo pixel under a point in symbol coordinates (modules).
@@ -243,10 +246,23 @@ impl<'a> Sampler<'a> {
 
     /// Luminance of the opaque logo pixel under a point in symbol
     /// coordinates (modules), as a scanner sees the embedded image.
+    /// With colorize, the page draws every opaque pixel in the colorize
+    /// color and makes white pixels transparent when that option is on,
+    /// so the check applies the same rule.
     pub fn luminance_at(&self, mx: f64, my: f64) -> Option<f64> {
         let (r, g, b, a) = self.pixel_at(mx, my)?;
         if a < self.p.alpha_threshold {
             return None;
+        }
+        if self.p.colorize {
+            if self.p.white_transparent
+                && r >= self.p.white_cutoff
+                && g >= self.p.white_cutoff
+                && b >= self.p.white_cutoff
+            {
+                return None;
+            }
+            return Some(Dot::from_u32(self.p.colorize_color).luminance());
         }
         Some(luminance(r, g, b))
     }
@@ -348,7 +364,12 @@ fn escape_attr(s: &str) -> String {
 }
 
 /// Produce the SVG document. `image` is drawn over the dots in embed mode.
-pub fn to_svg(width: usize, dots: &[Option<Dot>], p: &Params, image: Option<&EmbeddedImage>) -> String {
+pub fn to_svg(
+    width: usize,
+    dots: &[Option<Dot>],
+    p: &Params,
+    image: Option<&EmbeddedImage>,
+) -> String {
     let q = p.quiet_zone as usize;
     let total = width + 2 * q;
     let d = p.dot_scale.clamp(0.05, 1.0);

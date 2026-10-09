@@ -54,7 +54,8 @@ from the project root, then open `http://localhost:8000/www/`.
 ### Colorize
 
 The option **Colorize the logo** gives every opaque logo pixel one color from
-the color picker. Transparent pixels stay transparent, and white pixels stay
+the color picker. It works in every logo mode. In Embed mode the page draws
+a recolored copy of the image. Transparent pixels stay transparent, and white pixels stay
 transparent when **Treat white as transparent** is on.
 
 ### Decode check

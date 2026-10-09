@@ -177,7 +177,7 @@
         <label class="inline" style="margin-bottom:8px"><input id="colorize" type="checkbox"> Colorize the logo</label>
         <div><label for="colorizeColor">Logo color</label><input id="colorizeColor" type="color" value="#d62828"></div>
       </div>
-      <p class="hint">Colorize gives every opaque logo pixel one color. White pixels stay transparent when that option is on.</p>
+      <p class="hint">Colorize gives every opaque logo pixel one color, in every logo mode. White pixels stay transparent when that option is on.</p>
 
       <details>
         <summary>Logo sampling</summary>
@@ -338,7 +338,7 @@ function doRender() {
   const err = $('error');
   try {
     const res = logo
-      ? wasm_bindgen.render(els.text.value, logo.data, logo.width, logo.height, logo.href || '', opts)
+      ? wasm_bindgen.render(els.text.value, logo.data, logo.width, logo.height, embedHref() || '', opts)
       : wasm_bindgen.render(els.text.value, new Uint8Array(0), 0, 0, '', opts);
     lastResult = {
       version: res.version, width: res.width, data_modules: res.data_modules,
@@ -398,6 +398,32 @@ function updateBounds() {
 }
 
 // ---------- logo loading ----------
+// Embed mode draws the image as given, or a recolored copy when colorize is on.
+// The copy is cached until the logo or a colorize setting changes.
+let colorizedCache = null;
+function embedHref() {
+  if (!logo || +els.logoMode.value !== 3) return logo && logo.href;
+  if (!els.colorize.checked) return logo.href;
+  const key = [els.colorizeColor.value, els.whiteTransparent.checked, els.whiteCutoff.value, els.alpha.value].join('|');
+  if (colorizedCache && colorizedCache.logo === logo && colorizedCache.key === key) return colorizedCache.href;
+  const { width: w, height: h, data } = logo;
+  const rgb = [1, 3, 5].map((i) => parseInt(els.colorizeColor.value.slice(i, i + 2), 16));
+  const alpha = +els.alpha.value, cutoff = +els.whiteCutoff.value, whiteClear = els.whiteTransparent.checked;
+  const out = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < data.length; i += 4) {
+    const a = data[i + 3];
+    if (a < alpha) continue;
+    if (whiteClear && data[i] >= cutoff && data[i + 1] >= cutoff && data[i + 2] >= cutoff) continue;
+    out[i] = rgb[0]; out[i + 1] = rgb[1]; out[i + 2] = rgb[2]; out[i + 3] = 255;
+  }
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  c.getContext('2d').putImageData(new ImageData(out, w, h), 0, 0);
+  const href = c.toDataURL('image/png');
+  colorizedCache = { logo, key, href };
+  return href;
+}
+
 // `href` is the image as given (a data URL). Embed mode draws it into the SVG.
 function setLogoFromImage(img, name, href) {
   const maxSide = 512;

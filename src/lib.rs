@@ -289,7 +289,15 @@ mod tests {
         o.logo_mode = 1;
         o.logo_size = 0.3;
         let logo = disc_logo(64, (30, 60, 200));
-        let r = render_inner("https://example.com/some/longer/path", &logo, 64, 64, "", &o).unwrap();
+        let r = render_inner(
+            "https://example.com/some/longer/path",
+            &logo,
+            64,
+            64,
+            "",
+            &o,
+        )
+        .unwrap();
         assert!(r.changed_modules > 0);
         assert!(r.verified, "decoded = {:?}", r.decoded);
     }
@@ -331,16 +339,34 @@ mod tests {
         o.logo_size = 0.3;
         let logo = disc_logo(64, (30, 60, 200));
         let href = "data:image/png;base64,AAAA&x=\"1\"";
-        let r = render_inner("https://example.com/some/longer/path", &logo, 64, 64, href, &o).unwrap();
+        let r = render_inner(
+            "https://example.com/some/longer/path",
+            &logo,
+            64,
+            64,
+            href,
+            &o,
+        )
+        .unwrap();
         assert!(r.logo_modules > 0);
         assert!(r.changed_modules > 0);
         assert!(r.verified, "decoded = {:?}", r.decoded);
         assert!(r.svg.contains("<image "));
-        assert!(r.svg.contains("href=\"data:image/png;base64,AAAA&amp;x=&quot;1&quot;\""));
+        assert!(r
+            .svg
+            .contains("href=\"data:image/png;base64,AAAA&amp;x=&quot;1&quot;\""));
         // The image is drawn as given: no dot takes the logo color.
         assert!(!r.svg.contains("#1e3cc8"));
         // Without an href there is no image element.
-        let r = render_inner("https://example.com/some/longer/path", &logo, 64, 64, "", &o).unwrap();
+        let r = render_inner(
+            "https://example.com/some/longer/path",
+            &logo,
+            64,
+            64,
+            "",
+            &o,
+        )
+        .unwrap();
         assert!(!r.svg.contains("<image "));
     }
 
@@ -373,6 +399,28 @@ mod tests {
         o.embed_margin = 2.0;
         let wide = render_inner("https://example.com", &logo, 64, 64, "data:,", &o).unwrap();
         assert!(wide.logo_modules > tight.logo_modules);
+    }
+
+    #[test]
+    fn embed_check_uses_colorize_luminance() {
+        // A white disc hides the dots under it. With colorize and
+        // white-as-transparent, the disc is transparent and the dots show.
+        let mut o = RenderOptions::default();
+        o.logo_mode = 3;
+        o.logo_size = 0.9;
+        o.embed_margin = 0.0;
+        let logo = disc_logo(64, (255, 255, 255));
+        let plain = render_inner("https://example.com", &logo, 64, 64, "data:x", &o).unwrap();
+        assert!(!plain.verified);
+        o.colorize = true;
+        o.colorize_color = 0x000000;
+        o.white_transparent = false;
+        let black = render_inner("https://example.com", &logo, 64, 64, "data:x", &o).unwrap();
+        assert!(!black.verified);
+        o.white_transparent = true;
+        let clear = render_inner("https://example.com", &logo, 64, 64, "data:x", &o).unwrap();
+        assert_eq!(clear.changed_modules, plain.changed_modules);
+        assert!(clear.verified || clear.changed_modules > 0);
     }
 
     #[test]
