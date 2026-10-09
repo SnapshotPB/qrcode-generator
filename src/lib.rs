@@ -5,7 +5,7 @@ pub mod qr;
 pub mod render;
 pub mod verify;
 
-use render::{Logo, Params};
+use render::{EmbeddedImage, Logo, Params, Sampler, MODE_EMBED};
 use wasm_bindgen::prelude::*;
 
 /// Options for one render. All fields are plain values so the page can set
@@ -17,7 +17,8 @@ pub struct RenderOptions {
     pub ec_level: u8,
     /// 0 = automatic, 1..=40 forces at least that version.
     pub min_version: u8,
-    /// 0 = no logo, 1 = fill, 2 = tint (default).
+    /// 0 = no logo, 1 = fill, 2 = tint (default), 3 = embed (the image is
+    /// drawn as given over a cleared rectangle).
     pub logo_mode: u8,
     /// Logo center as a fraction of the symbol width (0..1).
     pub logo_cx: f64,
@@ -35,6 +36,8 @@ pub struct RenderOptions {
     /// Replace every opaque logo pixel with `colorize_color`.
     pub colorize: bool,
     pub colorize_color: u32,
+    /// Embed mode: clear space around the image, in modules.
+    pub embed_margin: f64,
     pub dot_scale: f64,
     pub dot_shape: u8,
     pub quiet_zone: u8,
@@ -71,6 +74,7 @@ impl Default for RenderOptions {
             max_luminance: 0.7,
             colorize: false,
             colorize_color: 0xd62828,
+            embed_margin: 0.5,
             dot_scale: 0.85,
             dot_shape: 0,
             quiet_zone: 4,
@@ -98,6 +102,7 @@ impl From<&RenderOptions> for Params {
             max_luminance: o.max_luminance,
             colorize: o.colorize,
             colorize_color: o.colorize_color,
+            embed_margin: o.embed_margin,
             dot_scale: o.dot_scale,
             dot_shape: o.dot_shape,
             quiet_zone: o.quiet_zone,
@@ -137,16 +142,19 @@ impl RenderResult {
 }
 
 /// Render `text` as a QR symbol. `logo_rgba` is an RGBA pixel buffer of
-/// `logo_width * logo_height * 4` bytes, or empty for no logo.
+/// `logo_width * logo_height * 4` bytes, or empty for no logo. `logo_href`
+/// is the image as given, usually a data URL; embed mode draws it over the
+/// symbol, and the other modes ignore it.
 #[wasm_bindgen]
 pub fn render(
     text: &str,
     logo_rgba: &[u8],
     logo_width: u32,
     logo_height: u32,
+    logo_href: &str,
     options: &RenderOptions,
 ) -> Result<RenderResult, JsValue> {
-    render_inner(text, logo_rgba, logo_width, logo_height, options)
+    render_inner(text, logo_rgba, logo_width, logo_height, logo_href, options)
         .map_err(|e| JsValue::from_str(&e))
 }
 
@@ -155,6 +163,7 @@ pub fn render_inner(
     logo_rgba: &[u8],
     logo_width: u32,
     logo_height: u32,
+    logo_href: &str,
     options: &RenderOptions,
 ) -> Result<RenderResult, String> {
     if text.is_empty() {
@@ -180,7 +189,14 @@ pub fn render_inner(
 
     let params = Params::from(options);
     let (dots, stats) = render::color_modules(&matrix, logo.as_ref(), &params);
-    let svg = render::to_svg(matrix.width, &dots, &params);
+    let embedded = logo
+        .as_ref()
+        .filter(|_| params.logo_mode == MODE_EMBED && !logo_href.is_empty())
+        .map(|l| EmbeddedImage {
+            href: logo_href,
+            aspect: l.height as f64 / l.width as f64,
+        });
+    let svg = render::to_svg(matrix.width, &dots, &params, embedded.as_ref());
 
     let (verify_ran, verified, decoded) = if options.verify {
         let bg = render::Dot::from_u32(options.bg_color);
@@ -189,7 +205,20 @@ pub fn render_inner(
         } else {
             bg.luminance()
         };
-        let v = verify::verify(matrix.width, &dots, bg_lum, text);
+        // In embed mode the image hides the dots under it, so the check
+        // paints the image too.
+        let sampler = logo
+            .as_ref()
+            .filter(|_| params.logo_mode == MODE_EMBED && params.logo_size > 0.0)
+            .map(|l| Sampler::new(l, matrix.width, &params));
+        let overlay = |mx: f64, my: f64| sampler.as_ref().and_then(|s| s.luminance_at(mx, my));
+        let v = verify::verify(
+            matrix.width,
+            &dots,
+            bg_lum,
+            sampler.as_ref().map(|_| &overlay as verify::Overlay),
+            text,
+        );
         (true, v.ok, v.decoded)
     } else {
         (false, false, None)
@@ -234,7 +263,7 @@ mod tests {
     #[test]
     fn plain_symbol_decodes() {
         let o = RenderOptions::default();
-        let r = render_inner("https://example.com", &[], 0, 0, &o).unwrap();
+        let r = render_inner("https://example.com", &[], 0, 0, "", &o).unwrap();
         assert!(r.verify_ran);
         assert!(r.verified, "decoded = {:?}", r.decoded);
         assert_eq!(r.changed_modules, 0);
@@ -247,7 +276,7 @@ mod tests {
         assert_eq!(o.logo_mode, 2);
         o.logo_size = 0.6;
         let logo = disc_logo(64, (220, 40, 40));
-        let r = render_inner("https://example.com", &logo, 64, 64, &o).unwrap();
+        let r = render_inner("https://example.com", &logo, 64, 64, "", &o).unwrap();
         assert_eq!(r.changed_modules, 0);
         assert!(r.logo_modules > 0);
         assert!(r.verified, "decoded = {:?}", r.decoded);
@@ -260,7 +289,7 @@ mod tests {
         o.logo_mode = 1;
         o.logo_size = 0.3;
         let logo = disc_logo(64, (30, 60, 200));
-        let r = render_inner("https://example.com/some/longer/path", &logo, 64, 64, &o).unwrap();
+        let r = render_inner("https://example.com/some/longer/path", &logo, 64, 64, "", &o).unwrap();
         assert!(r.changed_modules > 0);
         assert!(r.verified, "decoded = {:?}", r.decoded);
     }
@@ -271,7 +300,7 @@ mod tests {
         o.logo_mode = 1;
         o.logo_size = 1.2;
         let logo = disc_logo(64, (0, 0, 0));
-        let r = render_inner("https://example.com", &logo, 64, 64, &o).unwrap();
+        let r = render_inner("https://example.com", &logo, 64, 64, "", &o).unwrap();
         assert!(!r.verified);
     }
 
@@ -283,16 +312,67 @@ mod tests {
         o.colorize_color = 0x123456;
         // An opaque white disc: with white_transparent the logo is invisible.
         let logo = disc_logo(64, (255, 255, 255));
-        let r = render_inner("https://example.com", &logo, 64, 64, &o).unwrap();
+        let r = render_inner("https://example.com", &logo, 64, 64, "", &o).unwrap();
         assert_eq!(r.logo_modules, 0);
         assert!(!r.svg.contains("#123456"));
         // Without white_transparent, every covered dark module takes the colorize color.
         o.white_transparent = false;
-        let r = render_inner("https://example.com", &logo, 64, 64, &o).unwrap();
+        let r = render_inner("https://example.com", &logo, 64, 64, "", &o).unwrap();
         assert!(r.logo_modules > 0);
         assert!(r.svg.contains("#123456"));
         assert!(!r.svg.contains("#ffffff\">\n<circle"));
         assert!(r.verified, "decoded = {:?}", r.decoded);
+    }
+
+    #[test]
+    fn embed_mode_clears_a_rectangle_and_draws_the_image() {
+        let mut o = RenderOptions::default();
+        o.logo_mode = 3;
+        o.logo_size = 0.3;
+        let logo = disc_logo(64, (30, 60, 200));
+        let href = "data:image/png;base64,AAAA&x=\"1\"";
+        let r = render_inner("https://example.com/some/longer/path", &logo, 64, 64, href, &o).unwrap();
+        assert!(r.logo_modules > 0);
+        assert!(r.changed_modules > 0);
+        assert!(r.verified, "decoded = {:?}", r.decoded);
+        assert!(r.svg.contains("<image "));
+        assert!(r.svg.contains("href=\"data:image/png;base64,AAAA&amp;x=&quot;1&quot;\""));
+        // The image is drawn as given: no dot takes the logo color.
+        assert!(!r.svg.contains("#1e3cc8"));
+        // Without an href there is no image element.
+        let r = render_inner("https://example.com/some/longer/path", &logo, 64, 64, "", &o).unwrap();
+        assert!(!r.svg.contains("<image "));
+    }
+
+    #[test]
+    fn embed_mode_check_sees_the_image() {
+        // A black disc as wide as the symbol hides the finder patterns, so the
+        // check must fail even though the margin clears no function module.
+        let mut o = RenderOptions::default();
+        o.logo_mode = 3;
+        o.logo_size = 1.0;
+        o.embed_margin = 0.0;
+        let logo = disc_logo(64, (0, 0, 0));
+        let r = render_inner("https://example.com", &logo, 64, 64, "data:,", &o).unwrap();
+        assert!(!r.verified);
+        // A small disc leaves the symbol readable.
+        o.logo_size = 0.25;
+        let r = render_inner("https://example.com", &logo, 64, 64, "data:,", &o).unwrap();
+        assert!(r.verified, "decoded = {:?}", r.decoded);
+    }
+
+    #[test]
+    fn embed_margin_grows_the_cleared_rectangle() {
+        let mut o = RenderOptions::default();
+        o.logo_mode = 3;
+        o.logo_size = 0.2;
+        o.verify = false;
+        let logo = disc_logo(64, (0, 0, 0));
+        o.embed_margin = 0.0;
+        let tight = render_inner("https://example.com", &logo, 64, 64, "data:,", &o).unwrap();
+        o.embed_margin = 2.0;
+        let wide = render_inner("https://example.com", &logo, 64, 64, "data:,", &o).unwrap();
+        assert!(wide.logo_modules > tight.logo_modules);
     }
 
     #[test]
@@ -312,7 +392,7 @@ mod tests {
     fn min_version_is_respected() {
         let mut o = RenderOptions::default();
         o.min_version = 5;
-        let r = render_inner("hi", &[], 0, 0, &o).unwrap();
+        let r = render_inner("hi", &[], 0, 0, "", &o).unwrap();
         assert_eq!(r.version, 5);
         assert_eq!(r.width, 37);
     }

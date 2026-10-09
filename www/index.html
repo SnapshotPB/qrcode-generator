@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>QR Logo Generator</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
   :root {
     --bg: #f4f5f7;
@@ -146,8 +148,14 @@
       <select id="logoMode">
         <option value="2" selected>Tint: only the existing dark modules take the logo colors</option>
         <option value="1">Fill: the logo shape is drawn with dots (uses error correction)</option>
+        <option value="3">Embed: the image is placed as given over a cleared area (uses error correction)</option>
         <option value="0">Off</option>
       </select>
+      <div id="embedControls" hidden>
+        <label for="embedMargin">Clear space around the image (modules)</label>
+        <div class="slider"><input id="embedMargin" type="range" min="0" max="3" step="0.25" value="0.5"><output for="embedMargin"></output></div>
+        <p class="hint">Embed keeps the image colors. The sampling options below only set the alpha threshold of the decode check.</p>
+      </div>
 
       <label for="logoSize">Size (% of code width)</label>
       <div class="slider"><input id="logoSize" type="range" min="5" max="120" step="0.5" value="50"><output for="logoSize"></output></div>
@@ -259,13 +267,13 @@ const els = {
   logoFile: $('logoFile'), logoMode: $('logoMode'), logoSize: $('logoSize'), logoX: $('logoX'), logoY: $('logoY'),
   logoRot: $('logoRot'), coverage: $('coverage'), alpha: $('alpha'), whiteTransparent: $('whiteTransparent'),
   whiteCutoff: $('whiteCutoff'), maxLum: $('maxLum'), protectFunction: $('protectFunction'),
-  colorize: $('colorize'), colorizeColor: $('colorizeColor'),
+  colorize: $('colorize'), colorizeColor: $('colorizeColor'), embedMargin: $('embedMargin'),
   dotColor: $('dotColor'), bgColor: $('bgColor'), transparentBg: $('transparentBg'), dotShape: $('dotShape'),
   quiet: $('quiet'), dotScale: $('dotScale'), verify: $('verify'), pngSize: $('pngSize'), showBounds: $('showBounds'),
 };
 const SETTINGS_KEY = 'qr-logo-settings-v2';
 
-let logo = null; // { data: Uint8Array, width, height }
+let logo = null; // { data: Uint8Array, width, height, href }
 let lastSvg = '';
 let lastResult = null;
 
@@ -305,6 +313,7 @@ function buildOptions() {
   o.max_luminance = +els.maxLum.value / 100;
   o.colorize = els.colorize.checked;
   o.colorize_color = hexToU32(els.colorizeColor.value);
+  o.embed_margin = +els.embedMargin.value;
   o.protect_function_color = els.protectFunction.checked;
   o.dot_color = hexToU32(els.dotColor.value);
   o.bg_color = hexToU32(els.bgColor.value);
@@ -330,8 +339,8 @@ function doRender() {
   const err = $('error');
   try {
     const res = logo
-      ? wasm_bindgen.render(els.text.value, logo.data, logo.width, logo.height, opts)
-      : wasm_bindgen.render(els.text.value, new Uint8Array(0), 0, 0, opts);
+      ? wasm_bindgen.render(els.text.value, logo.data, logo.width, logo.height, logo.href || '', opts)
+      : wasm_bindgen.render(els.text.value, new Uint8Array(0), 0, 0, '', opts);
     lastResult = {
       version: res.version, width: res.width, data_modules: res.data_modules,
       changed_modules: res.changed_modules, logo_modules: res.logo_modules,
@@ -365,7 +374,7 @@ function updateStatus(ms) {
   if (!r.verify_ran) { v.textContent = 'off'; v.className = ''; }
   else if (r.verified) { v.textContent = 'OK: the code decodes to the text'; v.className = 'ok'; }
   else if (r.decoded != null) { v.textContent = 'FAILED: decoded different text'; v.className = 'bad'; }
-  else { v.textContent = 'FAILED: no QR code found. Reduce the logo size or use Tint mode.'; v.className = 'bad'; }
+  else { v.textContent = 'FAILED: no QR code found. Reduce the logo size, add clear space, or use Tint mode.'; v.className = 'bad'; }
   $('sTime').textContent = `${ms.toFixed(1)} ms`;
 }
 
@@ -390,7 +399,8 @@ function updateBounds() {
 }
 
 // ---------- logo loading ----------
-function setLogoFromImage(img, name) {
+// `href` is the image as given (a data URL). Embed mode draws it into the SVG.
+function setLogoFromImage(img, name, href) {
   const maxSide = 512;
   let w = img.naturalWidth || img.width || 256;
   let h = img.naturalHeight || img.height || 256;
@@ -402,7 +412,7 @@ function setLogoFromImage(img, name) {
   const ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(img, 0, 0, w, h);
   const data = ctx.getImageData(0, 0, w, h).data;
-  logo = { data: new Uint8Array(data.buffer), width: w, height: h };
+  logo = { data: new Uint8Array(data.buffer), width: w, height: h, href };
   const t = $('thumb').getContext('2d');
   t.clearRect(0, 0, 56, 56);
   const tk = Math.min(56 / w, 56 / h);
@@ -413,11 +423,21 @@ function setLogoFromImage(img, name) {
 
 function loadLogoFile(file) {
   if (!file || !file.type.startsWith('image/')) return;
-  const url = URL.createObjectURL(file);
+  const reader = new FileReader();
+  reader.onload = () => loadLogoUrl(reader.result, file.name || 'image');
+  reader.onerror = () => { $('error').textContent = 'The image could not be read.'; };
+  reader.readAsDataURL(file);
+}
+
+function loadLogoUrl(url, name) {
   const img = new Image();
-  img.onload = () => { setLogoFromImage(img, file.name || 'image'); URL.revokeObjectURL(url); };
-  img.onerror = () => { $('error').textContent = 'The image could not be loaded.'; URL.revokeObjectURL(url); };
+  img.onload = () => setLogoFromImage(img, name, url);
+  img.onerror = () => { $('error').textContent = 'The image could not be loaded.'; };
   img.src = url;
+}
+
+function svgToDataUrl(svg) {
+  return 'data:image/svg+xml;base64,' + btoa(String.fromCharCode(...new TextEncoder().encode(svg)));
 }
 
 function clearLogo() {
@@ -432,10 +452,7 @@ function clearLogo() {
 async function demoLogo() {
   try {
     const svg = DEMO_LOGO_SVG || await (await fetch('demo-logo.svg')).text();
-    const img = new Image();
-    img.onload = () => setLogoFromImage(img, 'Snapshot logo');
-    img.onerror = () => { $('error').textContent = 'The demo logo could not be loaded.'; };
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    loadLogoUrl(svgToDataUrl(svg), 'Snapshot logo');
   } catch (e) {
     $('error').textContent = 'The demo logo could not be loaded: ' + e;
   }
@@ -498,7 +515,7 @@ function wireStage() {
 
 // ---------- settings ----------
 const persisted = ['text', 'ec', 'minVersion', 'logoMode', 'logoSize', 'logoX', 'logoY', 'logoRot', 'coverage',
-  'alpha', 'whiteTransparent', 'whiteCutoff', 'maxLum', 'protectFunction', 'colorize', 'colorizeColor', 'dotColor', 'bgColor', 'transparentBg',
+  'alpha', 'whiteTransparent', 'whiteCutoff', 'maxLum', 'protectFunction', 'colorize', 'colorizeColor', 'embedMargin', 'dotColor', 'bgColor', 'transparentBg',
   'dotShape', 'quiet', 'dotScale', 'verify', 'pngSize', 'showBounds'];
 const defaults = {};
 for (const k of persisted) defaults[k] = els[k].type === 'checkbox' ? els[k].checked : els[k].value;
@@ -535,6 +552,7 @@ function updateOutputs() {
   for (const out of document.querySelectorAll('output[for]')) {
     out.textContent = $(out.getAttribute('for')).value;
   }
+  $('embedControls').hidden = +els.logoMode.value !== 3;
 }
 
 // ---------- download ----------

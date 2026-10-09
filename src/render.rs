@@ -2,12 +2,19 @@
 
 use crate::qr::Matrix;
 
+pub const MODE_OFF: u8 = 0;
+pub const MODE_FILL: u8 = 1;
+pub const MODE_TINT: u8 = 2;
+pub const MODE_EMBED: u8 = 3;
+
 /// Options that control the logo placement and the drawing style.
 /// All lengths are fractions of the symbol width (without quiet zone),
 /// so the same values work for every QR version.
 #[derive(Clone, Copy, Debug)]
 pub struct Params {
-    /// 0 = no logo, 1 = fill (logo shape overrides modules), 2 = tint (only dark modules take the logo color).
+    /// 0 = no logo, 1 = fill (logo shape overrides modules), 2 = tint (only
+    /// dark modules take the logo color), 3 = embed (the image is drawn as
+    /// given over a cleared rectangle).
     pub logo_mode: u8,
     pub logo_cx: f64,
     pub logo_cy: f64,
@@ -23,6 +30,8 @@ pub struct Params {
     /// Replace every opaque logo pixel with `colorize_color`.
     pub colorize: bool,
     pub colorize_color: u32,
+    /// Embed mode: clear space around the image, in modules.
+    pub embed_margin: f64,
     /// Dot diameter relative to the module size (0..1].
     pub dot_scale: f64,
     /// 0 = circle, 1 = square, 2 = rounded square.
@@ -89,7 +98,7 @@ pub fn color_modules(m: &Matrix, logo: Option<&Logo>, p: &Params) -> (Vec<Option
     let mut stats = Stats::default();
 
     let sampler = logo
-        .filter(|_| p.logo_mode != 0 && p.logo_size > 0.0)
+        .filter(|_| p.logo_mode != MODE_OFF && p.logo_size > 0.0)
         .map(|l| Sampler::new(l, w, p));
 
     for r in 0..w {
@@ -101,47 +110,62 @@ pub fn color_modules(m: &Matrix, logo: Option<&Logo>, p: &Params) -> (Vec<Option
                 stats.data_modules += 1;
             }
 
-            let logo_color = sampler.as_ref().and_then(|s| s.sample(r, c));
-
-            let dot = match (logo_color, p.logo_mode) {
-                (Some(color), 1) => {
-                    // Fill mode: the logo shape overrides data modules.
-                    if function {
-                        if dark {
-                            Some(if p.protect_function_color {
-                                base
+            let dot = if p.logo_mode == MODE_EMBED {
+                let under_image = sampler.as_ref().is_some_and(|s| s.in_footprint(r, c));
+                if under_image && !function {
+                    // Embed mode: the rectangle under the image holds no dots.
+                    if dark {
+                        stats.changed_modules += 1;
+                    }
+                    stats.logo_modules += 1;
+                    None
+                } else if dark {
+                    Some(base)
+                } else {
+                    None
+                }
+            } else {
+                let logo_color = sampler.as_ref().and_then(|s| s.sample(r, c));
+                match (logo_color, p.logo_mode) {
+                    (Some(color), MODE_FILL) => {
+                        // Fill mode: the logo shape overrides data modules.
+                        if function {
+                            if dark {
+                                Some(if p.protect_function_color {
+                                    base
+                                } else {
+                                    color
+                                })
                             } else {
-                                color
-                            })
+                                None
+                            }
+                        } else {
+                            if !dark {
+                                stats.changed_modules += 1;
+                            }
+                            stats.logo_modules += 1;
+                            Some(color)
+                        }
+                    }
+                    (Some(color), MODE_TINT) => {
+                        // Tint mode: only dark modules take the logo color.
+                        if dark {
+                            stats.logo_modules += 1;
+                            if function && p.protect_function_color {
+                                Some(base)
+                            } else {
+                                Some(color)
+                            }
                         } else {
                             None
                         }
-                    } else {
-                        if !dark {
-                            stats.changed_modules += 1;
-                        }
-                        stats.logo_modules += 1;
-                        Some(color)
                     }
-                }
-                (Some(color), 2) => {
-                    // Tint mode: only dark modules take the logo color.
-                    if dark {
-                        stats.logo_modules += 1;
-                        if function && p.protect_function_color {
+                    _ => {
+                        if dark {
                             Some(base)
                         } else {
-                            Some(color)
+                            None
                         }
-                    } else {
-                        None
-                    }
-                }
-                _ => {
-                    if dark {
-                        Some(base)
-                    } else {
-                        None
                     }
                 }
             };
@@ -155,10 +179,12 @@ pub fn color_modules(m: &Matrix, logo: Option<&Logo>, p: &Params) -> (Vec<Option
 }
 
 /// Maps module positions to logo pixels and averages the covered color.
-struct Sampler<'a> {
+pub struct Sampler<'a> {
     logo: &'a Logo<'a>,
     cx: f64,
     cy: f64,
+    /// Width of the logo in modules.
+    size_modules: f64,
     scale: f64, // logo pixels per module
     cos: f64,
     sin: f64,
@@ -168,7 +194,7 @@ struct Sampler<'a> {
 const SUPER: usize = 4;
 
 impl<'a> Sampler<'a> {
-    fn new(logo: &'a Logo<'a>, width: usize, p: &Params) -> Self {
+    pub fn new(logo: &'a Logo<'a>, width: usize, p: &Params) -> Self {
         let w = width as f64;
         let size_modules = (p.logo_size * w).max(1e-6);
         let angle = p.logo_rotation.to_radians();
@@ -176,6 +202,7 @@ impl<'a> Sampler<'a> {
             logo,
             cx: p.logo_cx * w,
             cy: p.logo_cy * w,
+            size_modules,
             scale: logo.width as f64 / size_modules,
             cos: angle.cos(),
             sin: angle.sin(),
@@ -183,31 +210,78 @@ impl<'a> Sampler<'a> {
         }
     }
 
+    /// Height of the logo in modules.
+    fn height_modules(&self) -> f64 {
+        self.size_modules * self.logo.height as f64 / self.logo.width as f64
+    }
+
+    /// Rotate a point in symbol coordinates (modules) into the logo frame,
+    /// with the origin at the logo center.
+    fn to_logo_frame(&self, mx: f64, my: f64) -> (f64, f64) {
+        let mx = mx - self.cx;
+        let my = my - self.cy;
+        (mx * self.cos + my * self.sin, -mx * self.sin + my * self.cos)
+    }
+
+    /// The logo pixel under a point in symbol coordinates (modules).
+    fn pixel_at(&self, mx: f64, my: f64) -> Option<(u8, u8, u8, u8)> {
+        let (lw, lh) = (self.logo.width as f64, self.logo.height as f64);
+        let (rx, ry) = self.to_logo_frame(mx, my);
+        let px = rx * self.scale + lw / 2.0;
+        let py = ry * self.scale + lh / 2.0;
+        if px < 0.0 || py < 0.0 || px >= lw || py >= lh {
+            return None;
+        }
+        let idx = ((py as usize) * self.logo.width + px as usize) * 4;
+        Some((
+            self.logo.rgba[idx],
+            self.logo.rgba[idx + 1],
+            self.logo.rgba[idx + 2],
+            self.logo.rgba[idx + 3],
+        ))
+    }
+
+    /// Luminance of the opaque logo pixel under a point in symbol
+    /// coordinates (modules), as a scanner sees the embedded image.
+    pub fn luminance_at(&self, mx: f64, my: f64) -> Option<f64> {
+        let (r, g, b, a) = self.pixel_at(mx, my)?;
+        if a < self.p.alpha_threshold {
+            return None;
+        }
+        Some(luminance(r, g, b))
+    }
+
+    /// `true` when any part of the module lies in the rectangle of the
+    /// image plus the embed margin.
+    pub fn in_footprint(&self, row: usize, col: usize) -> bool {
+        let margin = self.p.embed_margin.max(0.0);
+        let half_w = self.size_modules / 2.0 + margin;
+        let half_h = self.height_modules() / 2.0 + margin;
+        for j in 0..SUPER {
+            for i in 0..SUPER {
+                let mx = col as f64 + (i as f64 + 0.5) / SUPER as f64;
+                let my = row as f64 + (j as f64 + 0.5) / SUPER as f64;
+                let (rx, ry) = self.to_logo_frame(mx, my);
+                if rx.abs() <= half_w && ry.abs() <= half_h {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// Returns the average logo color under the module, or `None` when the
     /// logo does not cover enough of the module.
     fn sample(&self, row: usize, col: usize) -> Option<Dot> {
-        let (lw, lh) = (self.logo.width as f64, self.logo.height as f64);
         let mut hit = 0usize;
         let (mut sr, mut sg, mut sb) = (0u32, 0u32, 0u32);
         for j in 0..SUPER {
             for i in 0..SUPER {
-                let mx = col as f64 + (i as f64 + 0.5) / SUPER as f64 - self.cx;
-                let my = row as f64 + (j as f64 + 0.5) / SUPER as f64 - self.cy;
-                // Rotate the module point into the logo frame.
-                let rx = mx * self.cos + my * self.sin;
-                let ry = -mx * self.sin + my * self.cos;
-                let px = rx * self.scale + lw / 2.0;
-                let py = ry * self.scale + lh / 2.0;
-                if px < 0.0 || py < 0.0 || px >= lw || py >= lh {
+                let mx = col as f64 + (i as f64 + 0.5) / SUPER as f64;
+                let my = row as f64 + (j as f64 + 0.5) / SUPER as f64;
+                let Some((r, g, b, a)) = self.pixel_at(mx, my) else {
                     continue;
-                }
-                let idx = ((py as usize) * self.logo.width + px as usize) * 4;
-                let (r, g, b, a) = (
-                    self.logo.rgba[idx],
-                    self.logo.rgba[idx + 1],
-                    self.logo.rgba[idx + 2],
-                    self.logo.rgba[idx + 3],
-                );
+                };
                 if a < self.p.alpha_threshold {
                     continue;
                 }
@@ -251,8 +325,30 @@ impl<'a> Sampler<'a> {
     }
 }
 
-/// Produce the SVG document.
-pub fn to_svg(width: usize, dots: &[Option<Dot>], p: &Params) -> String {
+/// The image that embed mode draws over the symbol.
+pub struct EmbeddedImage<'a> {
+    /// The `href` of the SVG `<image>`, usually a data URL.
+    pub href: &'a str,
+    /// Height of the image divided by its width.
+    pub aspect: f64,
+}
+
+fn escape_attr(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+/// Produce the SVG document. `image` is drawn over the dots in embed mode.
+pub fn to_svg(width: usize, dots: &[Option<Dot>], p: &Params, image: Option<&EmbeddedImage>) -> String {
     let q = p.quiet_zone as usize;
     let total = width + 2 * q;
     let d = p.dot_scale.clamp(0.05, 1.0);
@@ -312,6 +408,20 @@ pub fn to_svg(width: usize, dots: &[Option<Dot>], p: &Params) -> String {
             }
         }
         svg.push_str("</g>\n");
+    }
+    if let Some(image) = image.filter(|_| p.logo_mode == MODE_EMBED && p.logo_size > 0.0) {
+        let w = width as f64;
+        let iw = p.logo_size * w;
+        let ih = iw * image.aspect;
+        let cx = q as f64 + p.logo_cx * w;
+        let cy = q as f64 + p.logo_cy * w;
+        svg.push_str(&format!(
+            "<image x=\"{x:.3}\" y=\"{y:.3}\" width=\"{iw:.3}\" height=\"{ih:.3}\" preserveAspectRatio=\"none\" transform=\"rotate({rot:.2} {cx:.3} {cy:.3})\" href=\"{href}\"/>\n",
+            x = cx - iw / 2.0,
+            y = cy - ih / 2.0,
+            rot = p.logo_rotation,
+            href = escape_attr(image.href),
+        ));
     }
     svg.push_str("</svg>\n");
     svg

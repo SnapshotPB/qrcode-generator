@@ -44,6 +44,12 @@ from the project root, then open `http://localhost:8000/www/`.
   line **Data modules changed** below the error correction limit (30 % for
   level H). Function patterns (finder, timing, alignment, format and version
   information) are never changed.
+- **Embed**: the image is placed as given, with its own colors, over the code.
+  The rectangle under the image, plus the **Clear space around the image**
+  margin, holds no dots, so the error correction must repair the lost data
+  modules as in Fill mode. The SVG holds the image file as a data URL, so an
+  SVG logo stays a vector. Function patterns keep their dots, but a large image
+  hides them; the decode check paints the image too, so it reports that.
 
 ### Colorize
 
@@ -68,7 +74,9 @@ with a phone camera.
 - `src/lib.rs`: the `wasm-bindgen` API (`RenderOptions`, `render`, `RenderResult`) and unit tests.
 - `www/index.html`: the web page.
 - `www/demo-logo.svg`: the built-in logo.
-- `tools/bundle.py`: inlines the JavaScript glue, the wasm binary and the built-in logo into `dist/index.html`.
+- `www/favicon.svg`: the page icon, inlined into the offline page.
+- `www/favicon.svg`: the icon of the page.
+- `tools/bundle.py`: inlines the JavaScript glue, the wasm binary, the built-in logo and the favicon into `dist/index.html`.
 
 ## Test
 

@@ -8,10 +8,21 @@ pub struct Verification {
     pub decoded: Option<String>,
 }
 
+/// Luminance (0..1) of an overlay at a point in symbol coordinates (modules),
+/// or `None` where the overlay is transparent.
+pub type Overlay<'a> = &'a dyn Fn(f64, f64) -> Option<f64>;
+
 /// Rasterize the dots as a greyscale image and try to decode it.
 /// Each dot is drawn with its own luminance so that light logo colors
-/// count as light modules, as a camera would see them.
-pub fn verify(width: usize, dots: &[Option<Dot>], bg_lum: f64, expected: &str) -> Verification {
+/// count as light modules, as a camera would see them. An `overlay`, the
+/// embedded image, is painted over the dots in the same way.
+pub fn verify(
+    width: usize,
+    dots: &[Option<Dot>],
+    bg_lum: f64,
+    overlay: Option<Overlay>,
+    expected: &str,
+) -> Verification {
     const SCALE: usize = 4;
     const QUIET: usize = 4;
     let size = (width + 2 * QUIET) * SCALE;
@@ -27,6 +38,17 @@ pub fn verify(width: usize, dots: &[Option<Dot>], bg_lum: f64, expected: &str) -
                     for x in x0..x0 + SCALE {
                         img[y * size + x] = v;
                     }
+                }
+            }
+        }
+    }
+    if let Some(overlay) = overlay {
+        for y in 0..size {
+            let my = (y as f64 + 0.5) / SCALE as f64 - QUIET as f64;
+            for x in 0..size {
+                let mx = (x as f64 + 0.5) / SCALE as f64 - QUIET as f64;
+                if let Some(lum) = overlay(mx, my) {
+                    img[y * size + x] = (lum.clamp(0.0, 1.0) * 255.0) as u8;
                 }
             }
         }
