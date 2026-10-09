@@ -27,10 +27,4 @@ assert favicon_tag in html, "favicon link not found"
 favicon_b64 = base64.b64encode(open(favicon_path, "rb").read()).decode("ascii")
 html = html.replace(favicon_tag, 'href="data:image/svg+xml;base64,' + favicon_b64 + '"')
 
-icon_tag = '<link rel="icon" type="image/svg+xml" href="favicon.svg">'
-assert icon_tag in html, "favicon tag not found"
-icon_svg = open(favicon_path, "rb").read()
-icon_b64 = base64.b64encode(icon_svg).decode("ascii")
-html = html.replace(icon_tag, '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,' + icon_b64 + '">')
-
 open(out_path, "w", encoding="utf-8").write(html)
