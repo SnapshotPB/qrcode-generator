@@ -25,8 +25,8 @@ from the project root, then open `http://localhost:8000/www/`.
 ## Use
 
 1. Type the text or URL.
-2. Drop, paste or choose a logo image. The button **Use demo logo** loads a
-   four-color ring.
+2. Drop, paste or choose a logo image. The button **Use Snapshot logo** loads
+   the logo from `www/demo-logo.svg`.
 3. Move the logo: drag it on the preview, use the arrow buttons, or use the
    position sliders. The arrow keys also move the logo when the focus is not in
    a field. Hold Shift for a quarter-module step.
@@ -67,7 +67,8 @@ with a phone camera.
 - `src/verify.rs`: decode check with `rqrr`.
 - `src/lib.rs`: the `wasm-bindgen` API (`RenderOptions`, `render`, `RenderResult`) and unit tests.
 - `www/index.html`: the web page.
-- `tools/bundle.py`: inlines the JavaScript glue and the wasm binary into `dist/index.html`.
+- `www/demo-logo.svg`: the built-in logo.
+- `tools/bundle.py`: inlines the JavaScript glue, the wasm binary and the built-in logo into `dist/index.html`.
 
 ## Test
 

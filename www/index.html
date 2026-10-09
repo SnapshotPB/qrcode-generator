@@ -136,7 +136,7 @@
         <div>
           <div id="logoInfo" class="hint">No logo loaded.</div>
           <div class="btns">
-            <button id="demoLogo" type="button">Use demo logo</button>
+            <button id="demoLogo" type="button">Use Snapshot logo</button>
             <button id="clearLogo" type="button">Remove logo</button>
           </div>
         </div>
@@ -251,6 +251,7 @@
 <script src="../pkg/qr_logo.js"></script>
 <script>
 const WASM_B64 = null;
+const DEMO_LOGO_SVG = null;
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -393,7 +394,7 @@ function setLogoFromImage(img, name) {
   const maxSide = 512;
   let w = img.naturalWidth || img.width || 256;
   let h = img.naturalHeight || img.height || 256;
-  const k = Math.min(1, maxSide / Math.max(w, h));
+  const k = maxSide / Math.max(w, h);
   w = Math.max(1, Math.round(w * k));
   h = Math.max(1, Math.round(h * k));
   const c = document.createElement('canvas');
@@ -427,28 +428,17 @@ function clearLogo() {
   render();
 }
 
-// A four-color ring, similar to the example, so the page works without a file.
-function demoLogo() {
-  const s = 256;
-  const c = document.createElement('canvas');
-  c.width = s; c.height = s;
-  const ctx = c.getContext('2d');
-  const colors = ['#ea4335', '#fbbc05', '#34a853', '#4285f4'];
-  const r = s * 0.38, lw = s * 0.22;
-  ctx.lineWidth = lw;
-  ctx.lineCap = 'butt';
-  const start = -Math.PI * 0.95;
-  const span = (Math.PI * 1.6) / 4;
-  for (let i = 0; i < 4; i++) {
-    ctx.beginPath();
-    ctx.strokeStyle = colors[i];
-    ctx.arc(s / 2, s / 2, r, start + i * span, start + (i + 1) * span);
-    ctx.stroke();
+// The Snapshot logo is embedded in the offline build, or fetched next to the page in dev.
+async function demoLogo() {
+  try {
+    const svg = DEMO_LOGO_SVG || await (await fetch('demo-logo.svg')).text();
+    const img = new Image();
+    img.onload = () => setLogoFromImage(img, 'Snapshot logo');
+    img.onerror = () => { $('error').textContent = 'The demo logo could not be loaded.'; };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  } catch (e) {
+    $('error').textContent = 'The demo logo could not be loaded: ' + e;
   }
-  // The bar of the "G".
-  ctx.fillStyle = colors[3];
-  ctx.fillRect(s / 2, s / 2 - lw / 2, r + lw / 2, lw);
-  setLogoFromImage(c, 'demo logo');
 }
 
 // ---------- drag, wheel and nudge ----------
