@@ -20,6 +20,9 @@ pub struct Params {
     pub white_cutoff: u8,
     /// Logo colors brighter than this luminance (0..1) are darkened.
     pub max_luminance: f64,
+    /// Replace every opaque logo pixel with `colorize_color`.
+    pub colorize: bool,
+    pub colorize_color: u32,
     /// Dot diameter relative to the module size (0..1].
     pub dot_scale: f64,
     /// 0 = circle, 1 = square, 2 = rounded square.
@@ -226,10 +229,14 @@ impl<'a> Sampler<'a> {
             return None;
         }
         let n = hit as u32;
-        let mut dot = Dot {
-            r: (sr / n) as u8,
-            g: (sg / n) as u8,
-            b: (sb / n) as u8,
+        let mut dot = if self.p.colorize {
+            Dot::from_u32(self.p.colorize_color)
+        } else {
+            Dot {
+                r: (sr / n) as u8,
+                g: (sg / n) as u8,
+                b: (sb / n) as u8,
+            }
         };
         let lum = dot.luminance();
         if lum > self.p.max_luminance && lum > 0.0 {

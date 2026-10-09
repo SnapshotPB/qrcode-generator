@@ -36,14 +36,20 @@ from the project root, then open `http://localhost:8000/www/`.
 
 ### Logo modes
 
+- **Tint** (default): only the dark modules of the code take the logo color. The
+  code keeps all its data, so the result scans with any logo size.
 - **Fill**: every module under the logo becomes a dot in the logo color. The
   logo shape is drawn with dots, as in the example image. The data modules under
   the logo are lost, so the error correction must repair them. Keep the status
   line **Data modules changed** below the error correction limit (30 % for
   level H). Function patterns (finder, timing, alignment, format and version
   information) are never changed.
-- **Tint**: only the dark modules of the code take the logo color. The code
-  keeps all its data.
+
+### Colorize
+
+The option **Colorize the logo** gives every opaque logo pixel one color from
+the color picker. Transparent pixels stay transparent, and white pixels stay
+transparent when **Treat white as transparent** is on.
 
 ### Decode check
 

@@ -144,8 +144,8 @@
 
       <label for="logoMode">Logo mode</label>
       <select id="logoMode">
-        <option value="1" selected>Fill: the logo shape is drawn with dots (uses error correction)</option>
-        <option value="2">Tint: only the existing dark modules take the logo colors</option>
+        <option value="2" selected>Tint: only the existing dark modules take the logo colors</option>
+        <option value="1">Fill: the logo shape is drawn with dots (uses error correction)</option>
         <option value="0">Off</option>
       </select>
 
@@ -166,6 +166,11 @@
       </div>
       <p class="hint">The nudge buttons move the logo by one module.</p>
       <label class="inline"><input id="showBounds" type="checkbox" checked> Show logo bounds on the preview</label>
+      <div class="row" style="align-items:end">
+        <label class="inline" style="margin-bottom:8px"><input id="colorize" type="checkbox"> Colorize the logo</label>
+        <div><label for="colorizeColor">Logo color</label><input id="colorizeColor" type="color" value="#d62828"></div>
+      </div>
+      <p class="hint">Colorize gives every opaque logo pixel one color. White pixels stay transparent when that option is on.</p>
 
       <details>
         <summary>Logo sampling</summary>
@@ -253,10 +258,11 @@ const els = {
   logoFile: $('logoFile'), logoMode: $('logoMode'), logoSize: $('logoSize'), logoX: $('logoX'), logoY: $('logoY'),
   logoRot: $('logoRot'), coverage: $('coverage'), alpha: $('alpha'), whiteTransparent: $('whiteTransparent'),
   whiteCutoff: $('whiteCutoff'), maxLum: $('maxLum'), protectFunction: $('protectFunction'),
+  colorize: $('colorize'), colorizeColor: $('colorizeColor'),
   dotColor: $('dotColor'), bgColor: $('bgColor'), transparentBg: $('transparentBg'), dotShape: $('dotShape'),
   quiet: $('quiet'), dotScale: $('dotScale'), verify: $('verify'), pngSize: $('pngSize'), showBounds: $('showBounds'),
 };
-const SETTINGS_KEY = 'qr-logo-settings-v1';
+const SETTINGS_KEY = 'qr-logo-settings-v2';
 
 let logo = null; // { data: Uint8Array, width, height }
 let lastSvg = '';
@@ -296,6 +302,8 @@ function buildOptions() {
   o.white_transparent = els.whiteTransparent.checked;
   o.white_cutoff = +els.whiteCutoff.value;
   o.max_luminance = +els.maxLum.value / 100;
+  o.colorize = els.colorize.checked;
+  o.colorize_color = hexToU32(els.colorizeColor.value);
   o.protect_function_color = els.protectFunction.checked;
   o.dot_color = hexToU32(els.dotColor.value);
   o.bg_color = hexToU32(els.bgColor.value);
@@ -500,7 +508,7 @@ function wireStage() {
 
 // ---------- settings ----------
 const persisted = ['text', 'ec', 'minVersion', 'logoMode', 'logoSize', 'logoX', 'logoY', 'logoRot', 'coverage',
-  'alpha', 'whiteTransparent', 'whiteCutoff', 'maxLum', 'protectFunction', 'dotColor', 'bgColor', 'transparentBg',
+  'alpha', 'whiteTransparent', 'whiteCutoff', 'maxLum', 'protectFunction', 'colorize', 'colorizeColor', 'dotColor', 'bgColor', 'transparentBg',
   'dotShape', 'quiet', 'dotScale', 'verify', 'pngSize', 'showBounds'];
 const defaults = {};
 for (const k of persisted) defaults[k] = els[k].type === 'checkbox' ? els[k].checked : els[k].value;

@@ -17,7 +17,7 @@ pub struct RenderOptions {
     pub ec_level: u8,
     /// 0 = automatic, 1..=40 forces at least that version.
     pub min_version: u8,
-    /// 0 = no logo, 1 = fill, 2 = tint.
+    /// 0 = no logo, 1 = fill, 2 = tint (default).
     pub logo_mode: u8,
     /// Logo center as a fraction of the symbol width (0..1).
     pub logo_cx: f64,
@@ -32,6 +32,9 @@ pub struct RenderOptions {
     pub white_transparent: bool,
     pub white_cutoff: u8,
     pub max_luminance: f64,
+    /// Replace every opaque logo pixel with `colorize_color`.
+    pub colorize: bool,
+    pub colorize_color: u32,
     pub dot_scale: f64,
     pub dot_shape: u8,
     pub quiet_zone: u8,
@@ -56,7 +59,7 @@ impl Default for RenderOptions {
         RenderOptions {
             ec_level: 3,
             min_version: 0,
-            logo_mode: 1,
+            logo_mode: 2,
             logo_cx: 0.5,
             logo_cy: 0.5,
             logo_size: 0.5,
@@ -66,6 +69,8 @@ impl Default for RenderOptions {
             white_transparent: true,
             white_cutoff: 235,
             max_luminance: 0.7,
+            colorize: false,
+            colorize_color: 0xd62828,
             dot_scale: 0.85,
             dot_shape: 0,
             quiet_zone: 4,
@@ -91,6 +96,8 @@ impl From<&RenderOptions> for Params {
             white_transparent: o.white_transparent,
             white_cutoff: o.white_cutoff,
             max_luminance: o.max_luminance,
+            colorize: o.colorize,
+            colorize_color: o.colorize_color,
             dot_scale: o.dot_scale,
             dot_shape: o.dot_shape,
             quiet_zone: o.quiet_zone,
@@ -235,9 +242,9 @@ mod tests {
     }
 
     #[test]
-    fn tint_mode_keeps_data() {
+    fn tint_mode_is_default_and_keeps_data() {
         let mut o = RenderOptions::default();
-        o.logo_mode = 2;
+        assert_eq!(o.logo_mode, 2);
         o.logo_size = 0.6;
         let logo = disc_logo(64, (220, 40, 40));
         let r = render_inner("https://example.com", &logo, 64, 64, &o).unwrap();
@@ -266,6 +273,26 @@ mod tests {
         let logo = disc_logo(64, (0, 0, 0));
         let r = render_inner("https://example.com", &logo, 64, 64, &o).unwrap();
         assert!(!r.verified);
+    }
+
+    #[test]
+    fn colorize_replaces_logo_colors_and_honors_white() {
+        let mut o = RenderOptions::default();
+        o.logo_size = 0.6;
+        o.colorize = true;
+        o.colorize_color = 0x123456;
+        // An opaque white disc: with white_transparent the logo is invisible.
+        let logo = disc_logo(64, (255, 255, 255));
+        let r = render_inner("https://example.com", &logo, 64, 64, &o).unwrap();
+        assert_eq!(r.logo_modules, 0);
+        assert!(!r.svg.contains("#123456"));
+        // Without white_transparent, every covered dark module takes the colorize color.
+        o.white_transparent = false;
+        let r = render_inner("https://example.com", &logo, 64, 64, &o).unwrap();
+        assert!(r.logo_modules > 0);
+        assert!(r.svg.contains("#123456"));
+        assert!(!r.svg.contains("#ffffff\">\n<circle"));
+        assert!(r.verified, "decoded = {:?}", r.decoded);
     }
 
     #[test]
