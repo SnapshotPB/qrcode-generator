@@ -3,6 +3,7 @@ name = "qr-logo"
 version = "0.1.0"
 edition = "2021"
 description = "QR code generator with a color logo, compiled to WebAssembly"
+license = "Apache-2.0"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
