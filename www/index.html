@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR Logo Generator</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --text: #1b1f24;
+    --muted: #5c6470;
+    --border: #d6dae0;
+    --accent: #2f7d4b;
+    --accent-text: #ffffff;
+    --ok: #2f7d4b;
+    --bad: #c62828;
+    --warn: #b26a00;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15181c;
+      --panel: #1f2329;
+      --text: #e8eaed;
+      --muted: #9aa3ad;
+      --border: #343a42;
+      --accent: #4caf6e;
+      --accent-text: #0e1a12;
+      --ok: #4caf6e;
+      --bad: #ef5350;
+      --warn: #ffb74d;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel);
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 18px; }
+  header span { color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: 380px 1fr; gap: 20px; padding: 20px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .panel + .panel { margin-top: 14px; }
+  .panel h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  label { display: block; margin: 8px 0 4px; font-weight: 600; font-size: 13px; }
+  label.inline { display: flex; align-items: center; gap: 8px; font-weight: 500; margin: 6px 0; }
+  label.inline input { margin: 0; }
+  textarea, input[type=text], input[type=number], select {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text); font: inherit; }
+  textarea { min-height: 70px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .slider { display: grid; grid-template-columns: 1fr 58px; gap: 8px; align-items: center; }
+  .slider input[type=range] { width: 100%; margin: 0; }
+  .slider output { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); text-align: right; }
+  button { padding: 7px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
+    color: var(--text); font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .nudge { display: grid; grid-template-columns: repeat(3, 36px); grid-template-rows: repeat(3, auto); gap: 4px; margin-top: 8px; }
+  .nudge button { padding: 5px 0; }
+  .nudge [data-nudge="0,-1"] { grid-area: 1 / 2; }
+  .nudge [data-nudge="-1,0"] { grid-area: 2 / 1; }
+  .nudge #center { grid-area: 2 / 2; }
+  .nudge [data-nudge="1,0"] { grid-area: 2 / 3; }
+  .nudge [data-nudge="0,1"] { grid-area: 3 / 2; }
+  .hint { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+  input[type=color] { width: 100%; height: 34px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
+  .logo-thumb { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .logo-thumb canvas { width: 56px; height: 56px; border: 1px solid var(--border); border-radius: 6px;
+    background: repeating-conic-gradient(#8884 0 25%, transparent 0 50%) 0 0 / 12px 12px; }
+  .drop { border: 1px dashed var(--border); border-radius: 8px; padding: 12px; text-align: center; color: var(--muted); font-size: 12px; }
+  .drop.over { border-color: var(--accent); color: var(--accent); }
+
+  #previewWrap { position: sticky; top: 20px; }
+  #stage { position: relative; width: 100%; max-width: 640px; aspect-ratio: 1; margin: 0 auto;
+    background: repeating-conic-gradient(#8883 0 25%, transparent 0 50%) 0 0 / 20px 20px;
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden; touch-action: none; user-select: none; }
+  #stage svg { display: block; width: 100%; height: 100%; }
+  #stage.grab { cursor: grab; }
+  #stage.grabbing { cursor: grabbing; }
+  #bounds { position: absolute; border: 1.5px dashed rgba(60,120,255,.9); pointer-events: none;
+    box-shadow: 0 0 0 1px rgba(255,255,255,.6); display: none; }
+  #stage.showBounds #bounds { display: block; }
+  .status { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin-top: 12px; font-size: 13px; }
+  .status dt { color: var(--muted); }
+  .status dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .ok { color: var(--ok); font-weight: 600; }
+  .bad { color: var(--bad); font-weight: 600; }
+  .warn { color: var(--warn); font-weight: 600; }
+  #error { color: var(--bad); margin-top: 8px; white-space: pre-wrap; }
+  details summary { cursor: pointer; font-weight: 600; margin: 8px 0 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>QR Logo Generator</h1>
+  <span>Rust + WebAssembly. Works offline. Drag the logo on the preview, use the wheel to resize it.</span>
+</header>
+<main>
+  <section id="controls">
+    <div class="panel">
+      <h2>Content</h2>
+      <label for="text">Text or URL</label>
+      <textarea id="text" spellcheck="false">https://example.com</textarea>
+      <div class="row">
+        <div>
+          <label for="ec">Error correction</label>
+          <select id="ec">
+            <option value="0">L (7 %)</option>
+            <option value="1">M (15 %)</option>
+            <option value="2">Q (25 %)</option>
+            <option value="3" selected>H (30 %)</option>
+          </select>
+        </div>
+        <div>
+          <label for="minVersion">Minimum version</label>
+          <input id="minVersion" type="number" min="0" max="40" value="0">
+          <p class="hint">0 = automatic. A higher version gives more modules for the logo.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Logo</h2>
+      <div id="drop" class="drop">
+        Drop an image here, paste one, or
+        <input id="logoFile" type="file" accept="image/*">
+      </div>
+      <div class="logo-thumb">
+        <canvas id="thumb" width="56" height="56"></canvas>
+        <div>
+          <div id="logoInfo" class="hint">No logo loaded.</div>
+          <div class="btns">
+            <button id="demoLogo" type="button">Use demo logo</button>
+            <button id="clearLogo" type="button">Remove logo</button>
+          </div>
+        </div>
+      </div>
+
+      <label for="logoMode">Logo mode</label>
+      <select id="logoMode">
+        <option value="1" selected>Fill: the logo shape is drawn with dots (uses error correction)</option>
+        <option value="2">Tint: only the existing dark modules take the logo colors</option>
+        <option value="0">Off</option>
+      </select>
+
+      <label for="logoSize">Size (% of code width)</label>
+      <div class="slider"><input id="logoSize" type="range" min="5" max="120" step="0.5" value="50"><output for="logoSize"></output></div>
+      <label for="logoX">Horizontal position (%)</label>
+      <div class="slider"><input id="logoX" type="range" min="-20" max="120" step="0.25" value="50"><output for="logoX"></output></div>
+      <label for="logoY">Vertical position (%)</label>
+      <div class="slider"><input id="logoY" type="range" min="-20" max="120" step="0.25" value="50"><output for="logoY"></output></div>
+      <label for="logoRot">Rotation (degrees)</label>
+      <div class="slider"><input id="logoRot" type="range" min="-180" max="180" step="1" value="0"><output for="logoRot"></output></div>
+      <div class="nudge">
+        <button type="button" data-nudge="0,-1" title="Move up">▲</button>
+        <button type="button" data-nudge="-1,0" title="Move left">◀</button>
+        <button type="button" id="center" title="Center the logo">●</button>
+        <button type="button" data-nudge="1,0" title="Move right">▶</button>
+        <button type="button" data-nudge="0,1" title="Move down">▼</button>
+      </div>
+      <p class="hint">The nudge buttons move the logo by one module.</p>
+      <label class="inline"><input id="showBounds" type="checkbox" checked> Show logo bounds on the preview</label>
+
+      <details>
+        <summary>Logo sampling</summary>
+        <label for="coverage">Minimum coverage of a module (%)</label>
+        <div class="slider"><input id="coverage" type="range" min="0" max="100" step="1" value="50"><output for="coverage"></output></div>
+        <p class="hint">A module takes the logo color when at least this part of its area is logo.</p>
+        <label for="alpha">Alpha threshold</label>
+        <div class="slider"><input id="alpha" type="range" min="0" max="255" step="1" value="128"><output for="alpha"></output></div>
+        <label class="inline"><input id="whiteTransparent" type="checkbox" checked> Treat white as transparent</label>
+        <label for="whiteCutoff">White cutoff</label>
+        <div class="slider"><input id="whiteCutoff" type="range" min="128" max="255" step="1" value="235"><output for="whiteCutoff"></output></div>
+        <label for="maxLum">Maximum brightness of logo colors (%)</label>
+        <div class="slider"><input id="maxLum" type="range" min="10" max="100" step="1" value="70"><output for="maxLum"></output></div>
+        <p class="hint">Light colors are darkened so that the scanner reads them as dark modules.</p>
+        <label class="inline"><input id="protectFunction" type="checkbox"> Keep finder and timing patterns in the dot color</label>
+      </details>
+    </div>
+
+    <div class="panel">
+      <h2>Style</h2>
+      <div class="row">
+        <div><label for="dotColor">Dot color</label><input id="dotColor" type="color" value="#2f7d4b"></div>
+        <div><label for="bgColor">Background</label><input id="bgColor" type="color" value="#ffffff"></div>
+      </div>
+      <label class="inline"><input id="transparentBg" type="checkbox"> Transparent background</label>
+      <div class="row">
+        <div>
+          <label for="dotShape">Dot shape</label>
+          <select id="dotShape">
+            <option value="0" selected>Circle</option>
+            <option value="2">Rounded square</option>
+            <option value="1">Square</option>
+          </select>
+        </div>
+        <div>
+          <label for="quiet">Quiet zone (modules)</label>
+          <input id="quiet" type="number" min="0" max="10" value="4">
+        </div>
+      </div>
+      <label for="dotScale">Dot size (% of module)</label>
+      <div class="slider"><input id="dotScale" type="range" min="30" max="100" step="1" value="85"><output for="dotScale"></output></div>
+    </div>
+
+    <div class="panel">
+      <h2>Output</h2>
+      <label class="inline"><input id="verify" type="checkbox" checked> Check that the code decodes after each change</label>
+      <div class="row">
+        <div><label for="pngSize">PNG size (px)</label><input id="pngSize" type="number" min="64" max="8192" value="1024"></div>
+      </div>
+      <div class="btns">
+        <button id="dlSvg" class="primary" type="button">Download SVG</button>
+        <button id="dlPng" class="primary" type="button">Download PNG</button>
+        <button id="copySvg" type="button">Copy SVG</button>
+        <button id="reset" type="button">Reset settings</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="previewWrap">
+    <div class="panel">
+      <div id="stage" class="showBounds">
+        <div id="svgHost"></div>
+        <div id="bounds"></div>
+      </div>
+      <div id="error"></div>
+      <dl class="status">
+        <dt>Version</dt><dd id="sVersion">–</dd>
+        <dt>Modules</dt><dd id="sWidth">–</dd>
+        <dt>Logo modules</dt><dd id="sLogo">–</dd>
+        <dt>Data modules changed</dt><dd id="sChanged">–</dd>
+        <dt>Decode check</dt><dd id="sVerify">–</dd>
+        <dt>Render time</dt><dd id="sTime">–</dd>
+      </dl>
+    </div>
+  </section>
+</main>
+
+<script src="../pkg/qr_logo.js"></script>
+<script>
+const WASM_B64 = null;
+
+const $ = (id) => document.getElementById(id);
+const els = {
+  text: $('text'), ec: $('ec'), minVersion: $('minVersion'),
+  logoFile: $('logoFile'), logoMode: $('logoMode'), logoSize: $('logoSize'), logoX: $('logoX'), logoY: $('logoY'),
+  logoRot: $('logoRot'), coverage: $('coverage'), alpha: $('alpha'), whiteTransparent: $('whiteTransparent'),
+  whiteCutoff: $('whiteCutoff'), maxLum: $('maxLum'), protectFunction: $('protectFunction'),
+  dotColor: $('dotColor'), bgColor: $('bgColor'), transparentBg: $('transparentBg'), dotShape: $('dotShape'),
+  quiet: $('quiet'), dotScale: $('dotScale'), verify: $('verify'), pngSize: $('pngSize'), showBounds: $('showBounds'),
+};
+const SETTINGS_KEY = 'qr-logo-settings-v1';
+
+let logo = null; // { data: Uint8Array, width, height }
+let lastSvg = '';
+let lastResult = null;
+
+function base64ToBytes(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function boot() {
+  const input = WASM_B64
+    ? { module_or_path: base64ToBytes(WASM_B64) }
+    : { module_or_path: '../pkg/qr_logo_bg.wasm' };
+  await wasm_bindgen(input);
+  loadSettings();
+  wire();
+  updateOutputs();
+  render();
+}
+
+function hexToU32(hex) { return parseInt(hex.slice(1), 16) >>> 0; }
+
+function buildOptions() {
+  const o = new wasm_bindgen.RenderOptions();
+  o.ec_level = +els.ec.value;
+  o.min_version = Math.max(0, Math.min(40, +els.minVersion.value || 0));
+  o.logo_mode = logo ? +els.logoMode.value : 0;
+  o.logo_cx = +els.logoX.value / 100;
+  o.logo_cy = +els.logoY.value / 100;
+  o.logo_size = +els.logoSize.value / 100;
+  o.logo_rotation = +els.logoRot.value;
+  o.coverage = +els.coverage.value / 100;
+  o.alpha_threshold = +els.alpha.value;
+  o.white_transparent = els.whiteTransparent.checked;
+  o.white_cutoff = +els.whiteCutoff.value;
+  o.max_luminance = +els.maxLum.value / 100;
+  o.protect_function_color = els.protectFunction.checked;
+  o.dot_color = hexToU32(els.dotColor.value);
+  o.bg_color = hexToU32(els.bgColor.value);
+  o.transparent_bg = els.transparentBg.checked;
+  o.dot_shape = +els.dotShape.value;
+  o.quiet_zone = Math.max(0, Math.min(10, +els.quiet.value || 0));
+  o.dot_scale = +els.dotScale.value / 100;
+  o.verify = els.verify.checked;
+  return o;
+}
+
+let pending = false;
+function render() {
+  if (pending) return;
+  pending = true;
+  requestAnimationFrame(doRender);
+}
+
+function doRender() {
+  pending = false;
+  const t0 = performance.now();
+  const opts = buildOptions();
+  const err = $('error');
+  try {
+    const res = logo
+      ? wasm_bindgen.render(els.text.value, logo.data, logo.width, logo.height, opts)
+      : wasm_bindgen.render(els.text.value, new Uint8Array(0), 0, 0, opts);
+    lastResult = {
+      version: res.version, width: res.width, data_modules: res.data_modules,
+      changed_modules: res.changed_modules, logo_modules: res.logo_modules,
+      verify_ran: res.verify_ran, verified: res.verified, decoded: res.decoded,
+    };
+    lastSvg = res.svg;
+    res.free();
+    err.textContent = '';
+    $('svgHost').innerHTML = lastSvg;
+    updateStatus(performance.now() - t0);
+    updateBounds();
+  } catch (e) {
+    err.textContent = String(e);
+    lastResult = null;
+  } finally {
+    opts.free();
+  }
+}
+
+function updateStatus(ms) {
+  const r = lastResult;
+  $('sVersion').textContent = r.version;
+  $('sWidth').textContent = `${r.width} × ${r.width}`;
+  $('sLogo').textContent = r.logo_modules;
+  const pct = r.data_modules ? (100 * r.changed_modules / r.data_modules) : 0;
+  const changed = $('sChanged');
+  changed.textContent = `${r.changed_modules} of ${r.data_modules} (${pct.toFixed(1)} %)`;
+  const limit = [7, 15, 25, 30][+els.ec.value];
+  changed.className = pct > limit ? 'bad' : (pct > limit * 0.6 ? 'warn' : '');
+  const v = $('sVerify');
+  if (!r.verify_ran) { v.textContent = 'off'; v.className = ''; }
+  else if (r.verified) { v.textContent = 'OK: the code decodes to the text'; v.className = 'ok'; }
+  else if (r.decoded != null) { v.textContent = 'FAILED: decoded different text'; v.className = 'bad'; }
+  else { v.textContent = 'FAILED: no QR code found. Reduce the logo size or use Tint mode.'; v.className = 'bad'; }
+  $('sTime').textContent = `${ms.toFixed(1)} ms`;
+}
+
+// Logo bounds overlay in preview coordinates.
+function updateBounds() {
+  const b = $('bounds');
+  if (!logo || !lastResult || +els.logoMode.value === 0) { b.style.display = 'none'; return; }
+  b.style.display = '';
+  const q = +els.quiet.value || 0;
+  const w = lastResult.width;
+  const total = w + 2 * q;
+  const sizeMod = +els.logoSize.value / 100 * w;
+  const hMod = sizeMod * logo.height / logo.width;
+  const cx = q + +els.logoX.value / 100 * w;
+  const cy = q + +els.logoY.value / 100 * w;
+  const pct = (v) => (100 * v / total) + '%';
+  b.style.left = pct(cx - sizeMod / 2);
+  b.style.top = pct(cy - hMod / 2);
+  b.style.width = pct(sizeMod);
+  b.style.height = pct(hMod);
+  b.style.transform = `rotate(${+els.logoRot.value}deg)`;
+}
+
+// ---------- logo loading ----------
+function setLogoFromImage(img, name) {
+  const maxSide = 512;
+  let w = img.naturalWidth || img.width || 256;
+  let h = img.naturalHeight || img.height || 256;
+  const k = Math.min(1, maxSide / Math.max(w, h));
+  w = Math.max(1, Math.round(w * k));
+  h = Math.max(1, Math.round(h * k));
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0, w, h);
+  const data = ctx.getImageData(0, 0, w, h).data;
+  logo = { data: new Uint8Array(data.buffer), width: w, height: h };
+  const t = $('thumb').getContext('2d');
+  t.clearRect(0, 0, 56, 56);
+  const tk = Math.min(56 / w, 56 / h);
+  t.drawImage(c, (56 - w * tk) / 2, (56 - h * tk) / 2, w * tk, h * tk);
+  $('logoInfo').textContent = `${name} (${w} × ${h})`;
+  render();
+}
+
+function loadLogoFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => { setLogoFromImage(img, file.name || 'image'); URL.revokeObjectURL(url); };
+  img.onerror = () => { $('error').textContent = 'The image could not be loaded.'; URL.revokeObjectURL(url); };
+  img.src = url;
+}
+
+function clearLogo() {
+  logo = null;
+  $('thumb').getContext('2d').clearRect(0, 0, 56, 56);
+  $('logoInfo').textContent = 'No logo loaded.';
+  els.logoFile.value = '';
+  render();
+}
+
+// A four-color ring, similar to the example, so the page works without a file.
+function demoLogo() {
+  const s = 256;
+  const c = document.createElement('canvas');
+  c.width = s; c.height = s;
+  const ctx = c.getContext('2d');
+  const colors = ['#ea4335', '#fbbc05', '#34a853', '#4285f4'];
+  const r = s * 0.38, lw = s * 0.22;
+  ctx.lineWidth = lw;
+  ctx.lineCap = 'butt';
+  const start = -Math.PI * 0.95;
+  const span = (Math.PI * 1.6) / 4;
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    ctx.strokeStyle = colors[i];
+    ctx.arc(s / 2, s / 2, r, start + i * span, start + (i + 1) * span);
+    ctx.stroke();
+  }
+  // The bar of the "G".
+  ctx.fillStyle = colors[3];
+  ctx.fillRect(s / 2, s / 2 - lw / 2, r + lw / 2, lw);
+  setLogoFromImage(c, 'demo logo');
+}
+
+// ---------- drag, wheel and nudge ----------
+function modulesPerPixel() {
+  const stage = $('stage');
+  const q = +els.quiet.value || 0;
+  const total = (lastResult ? lastResult.width : 21) + 2 * q;
+  return total / stage.clientWidth;
+}
+
+function moveLogo(dxMod, dyMod) {
+  if (!lastResult) return;
+  const w = lastResult.width;
+  els.logoX.value = (+els.logoX.value + 100 * dxMod / w).toFixed(2);
+  els.logoY.value = (+els.logoY.value + 100 * dyMod / w).toFixed(2);
+  updateOutputs();
+  saveSettings();
+  render();
+}
+
+function wireStage() {
+  const stage = $('stage');
+  let drag = null;
+  stage.classList.add('grab');
+  stage.addEventListener('pointerdown', (e) => {
+    if (!logo) return;
+    drag = { x: e.clientX, y: e.clientY, sx: +els.logoX.value, sy: +els.logoY.value };
+    stage.setPointerCapture(e.pointerId);
+    stage.classList.add('grabbing');
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if (!drag || !lastResult) return;
+    const mpp = modulesPerPixel();
+    const w = lastResult.width;
+    els.logoX.value = (drag.sx + 100 * (e.clientX - drag.x) * mpp / w).toFixed(2);
+    els.logoY.value = (drag.sy + 100 * (e.clientY - drag.y) * mpp / w).toFixed(2);
+    updateOutputs();
+    render();
+  });
+  const end = () => { if (drag) { drag = null; stage.classList.remove('grabbing'); saveSettings(); } };
+  stage.addEventListener('pointerup', end);
+  stage.addEventListener('pointercancel', end);
+  stage.addEventListener('wheel', (e) => {
+    if (!logo) return;
+    e.preventDefault();
+    const step = e.shiftKey ? 5 : 1;
+    if (e.altKey) {
+      els.logoRot.value = Math.max(-180, Math.min(180, +els.logoRot.value + (e.deltaY > 0 ? -step : step)));
+    } else {
+      els.logoSize.value = Math.max(5, Math.min(120, +els.logoSize.value + (e.deltaY > 0 ? -step : step)));
+    }
+    updateOutputs();
+    saveSettings();
+    render();
+  }, { passive: false });
+}
+
+// ---------- settings ----------
+const persisted = ['text', 'ec', 'minVersion', 'logoMode', 'logoSize', 'logoX', 'logoY', 'logoRot', 'coverage',
+  'alpha', 'whiteTransparent', 'whiteCutoff', 'maxLum', 'protectFunction', 'dotColor', 'bgColor', 'transparentBg',
+  'dotShape', 'quiet', 'dotScale', 'verify', 'pngSize', 'showBounds'];
+const defaults = {};
+for (const k of persisted) defaults[k] = els[k].type === 'checkbox' ? els[k].checked : els[k].value;
+
+function saveSettings() {
+  try {
+    const s = {};
+    for (const k of persisted) s[k] = els[k].type === 'checkbox' ? els[k].checked : els[k].value;
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  } catch (e) { /* storage is optional */ }
+}
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
+    if (!s) return;
+    for (const k of persisted) {
+      if (!(k in s)) continue;
+      if (els[k].type === 'checkbox') els[k].checked = !!s[k]; else els[k].value = s[k];
+    }
+  } catch (e) { /* ignore bad data */ }
+  $('stage').classList.toggle('showBounds', els.showBounds.checked);
+}
+function resetSettings() {
+  for (const k of persisted) {
+    if (els[k].type === 'checkbox') els[k].checked = defaults[k]; else els[k].value = defaults[k];
+  }
+  try { localStorage.removeItem(SETTINGS_KEY); } catch (e) {}
+  $('stage').classList.toggle('showBounds', els.showBounds.checked);
+  updateOutputs();
+  render();
+}
+
+function updateOutputs() {
+  for (const out of document.querySelectorAll('output[for]')) {
+    out.textContent = $(out.getAttribute('for')).value;
+  }
+}
+
+// ---------- download ----------
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+function downloadPng() {
+  if (!lastSvg) return;
+  const size = Math.max(64, Math.min(8192, +els.pngSize.value || 1024));
+  const img = new Image();
+  const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(lastSvg);
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = size; c.height = size;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, size, size);
+    c.toBlob((blob) => download(blob, 'qr-logo.png'), 'image/png');
+  };
+  img.onerror = () => { $('error').textContent = 'The PNG could not be made.'; };
+  img.src = url;
+}
+
+function wire() {
+  for (const k of persisted) {
+    els[k].addEventListener('input', () => { updateOutputs(); saveSettings(); render(); });
+  }
+  els.showBounds.addEventListener('input', () => $('stage').classList.toggle('showBounds', els.showBounds.checked));
+  els.logoFile.addEventListener('change', () => loadLogoFile(els.logoFile.files[0]));
+  $('clearLogo').addEventListener('click', clearLogo);
+  $('demoLogo').addEventListener('click', demoLogo);
+  $('center').addEventListener('click', () => { els.logoX.value = 50; els.logoY.value = 50; updateOutputs(); saveSettings(); render(); });
+  for (const b of document.querySelectorAll('[data-nudge]')) {
+    const [dx, dy] = b.dataset.nudge.split(',').map(Number);
+    b.addEventListener('click', () => moveLogo(dx, dy));
+  }
+  $('reset').addEventListener('click', resetSettings);
+  $('dlSvg').addEventListener('click', () => lastSvg && download(new Blob([lastSvg], { type: 'image/svg+xml' }), 'qr-logo.svg'));
+  $('dlPng').addEventListener('click', downloadPng);
+  $('copySvg').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(lastSvg); } catch (e) { $('error').textContent = 'The clipboard is not available.'; }
+  });
+
+  const drop = $('drop');
+  for (const ev of ['dragenter', 'dragover']) {
+    document.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); });
+  }
+  document.addEventListener('dragleave', (e) => { if (!e.relatedTarget) drop.classList.remove('over'); });
+  document.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('over');
+    loadLogoFile(e.dataTransfer.files[0]);
+  });
+  document.addEventListener('paste', (e) => {
+    const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
+    if (item) loadLogoFile(item.getAsFile());
+  });
+  document.addEventListener('keydown', (e) => {
+    if (!logo || e.target.matches('textarea, input, select')) return;
+    const map = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+    if (map[e.key]) { e.preventDefault(); const [dx, dy] = map[e.key]; moveLogo(dx * (e.shiftKey ? 0.25 : 1), dy * (e.shiftKey ? 0.25 : 1)); }
+  });
+  wireStage();
+}
+
+boot().catch((e) => { $('error').textContent = 'The WebAssembly module could not be loaded: ' + e; });
+</script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+name: Publish to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install wasm-bindgen and wasm-opt
+        run: |
+          WB=0.2.129
+          curl -sSL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${WB}/wasm-bindgen-${WB}-x86_64-unknown-linux-musl.tar.gz" \
+            | tar -xz --strip-components=1 -C /usr/local/bin "wasm-bindgen-${WB}-x86_64-unknown-linux-musl/wasm-bindgen"
+          BT=version_123
+          curl -sSL "https://github.com/WebAssembly/binaryen/releases/download/${BT}/binaryen-${BT}-x86_64-linux.tar.gz" \
+            | tar -xz --strip-components=2 -C /usr/local/bin "binaryen-${BT}/bin/wasm-opt"
+          wasm-bindgen --version
+          wasm-opt --version
+
+      - name: Test
+        run: cargo test --release
+
+      - name: Build
+        run: ./build.sh
+
+      - name: Upload the page
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
